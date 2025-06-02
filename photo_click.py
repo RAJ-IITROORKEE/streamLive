@@ -8,6 +8,7 @@ import time
 cap=cv2.VideoCapture("http://192.168.1.17:8080/video")
 # cap=cv2.VideoCapture(0)
 # 
+# Image folder if not exist dynamically will generate
 
 if(not os.path.exists("Images")):
     os.mkdir("Images")
