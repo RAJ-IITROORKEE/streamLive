@@ -168,50 +168,90 @@ export default function Home() {
 
   const takeSnapshot = async (sourceUrl?: string, camera?: CameraConfig) => {
     try {
-      // First, get the snapshot from the backend
-      const body = sourceUrl ? { camera_url: sourceUrl } : { camera_index: 0 }
-      const res = await fetch(`${API}/snapshot`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const txt = await res.text()
-        throw new Error(txt || "snapshot failed")
+      if (!sourceUrl) {
+        throw new Error('Camera URL is required for snapshot')
       }
-      const data = await res.json()
+
+      toast.info("Capturing snapshot...")
+
+      // Try client-side capture first (works if CORS allows it)
+      let blob: Blob
       
-      // Get the image from backend - backend returns { filename, url, timestamp }
-      // The url is relative like "/images/snapshot_xxx.jpg"
-      const imageUrl = `${API}${data.url}`
-      const imageRes = await fetch(imageUrl)
-      
-      if (!imageRes.ok) {
-        throw new Error('Failed to fetch image from backend')
+      try {
+        // Create a canvas to capture the current frame from the camera stream
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          throw new Error('Could not create canvas context')
+        }
+
+        // Create an image element to load the camera stream
+        const img = new Image()
+        img.crossOrigin = 'anonymous' // Try to enable CORS
+        
+        // Wait for image to load with timeout
+        await Promise.race([
+          new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve()
+            img.onerror = () => reject(new Error('Failed to load camera stream'))
+            img.src = sourceUrl
+          }),
+          new Promise<void>((_, reject) => 
+            setTimeout(() => reject(new Error('Image load timeout')), 5000)
+          )
+        ])
+
+        // Set canvas size to match image
+        canvas.width = img.naturalWidth || img.width || 640
+        canvas.height = img.naturalHeight || img.height || 480
+
+        // Draw the image onto canvas
+        ctx.drawImage(img, 0, 0)
+
+        // Convert canvas to blob
+        blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (b) => {
+              if (b) resolve(b)
+              else reject(new Error('Failed to create image blob'))
+            },
+            'image/jpeg',
+            0.92
+          )
+        })
+      } catch (clientError) {
+        // If client-side capture fails (CORS issue), try fetching through our API
+        console.log('Client-side capture failed, trying server-side:', clientError)
+        
+        // Fetch the image through our Next.js API which can act as a proxy
+        const proxyRes = await fetch(sourceUrl)
+        if (!proxyRes.ok) {
+          throw new Error('Failed to fetch camera stream')
+        }
+        blob = await proxyRes.blob()
       }
-      
-      const imageBlob = await imageRes.blob()
-      
+
       // Upload to Cloudinary via our Next.js API
       const formData = new FormData()
-      formData.append('image', imageBlob, data.filename || 'snapshot.jpg')
+      formData.append('image', blob, `snapshot_${Date.now()}.jpg`)
       formData.append('cameraName', camera?.name || 'Unknown Camera')
-      formData.append('cameraUrl', sourceUrl || 'webcam')
-      
+      formData.append('cameraUrl', sourceUrl)
+
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
-      
+
       if (!uploadRes.ok) {
         const errorData = await uploadRes.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to upload to cloud storage')
       }
-      
+
       await uploadRes.json()
       toast.success("Snapshot saved to cloud successfully!")
     } catch (e) {
       const msg = e && (e as Error).message ? (e as Error).message : String(e)
+      console.error('Snapshot error:', e)
       toast.error("Snapshot failed: " + msg)
     }
   }
