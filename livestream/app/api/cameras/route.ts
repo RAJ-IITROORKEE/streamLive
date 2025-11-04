@@ -5,6 +5,15 @@ import Camera from '@/models/Camera'
 // GET all cameras
 export async function GET() {
   try {
+    // Check if MONGODB_URI is set
+    if (!process.env.MONGODB_URI) {
+      console.error('MONGODB_URI is not defined in environment variables')
+      return NextResponse.json(
+        { error: 'Database configuration error. Please contact administrator.' },
+        { status: 500 }
+      )
+    }
+
     await connectDB()
 
     const cameras = await Camera.find({ isActive: true })
@@ -17,8 +26,10 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Fetch cameras error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Error details:', errorMessage)
     return NextResponse.json(
-      { error: 'Failed to fetch cameras', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch cameras', details: errorMessage },
       { status: 500 }
     )
   }
@@ -27,6 +38,15 @@ export async function GET() {
 // POST create new camera
 export async function POST(request: NextRequest) {
   try {
+    // Check if MONGODB_URI is set
+    if (!process.env.MONGODB_URI) {
+      console.error('MONGODB_URI is not defined in environment variables')
+      return NextResponse.json(
+        { error: 'Database configuration error. Please contact administrator.' },
+        { status: 500 }
+      )
+    }
+
     await connectDB()
 
     const body = await request.json()
@@ -62,8 +82,10 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
   } catch (error) {
     console.error('Create camera error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Error details:', errorMessage)
     return NextResponse.json(
-      { error: 'Failed to create camera', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create camera', details: errorMessage },
       { status: 500 }
     )
   }
