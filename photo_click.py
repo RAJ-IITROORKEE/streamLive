@@ -3,9 +3,9 @@ import os
 import threading
 import time
 
-# cap=cv2.VideoCapture("http://10.81.49.154:8080/video")
-# cap=cv2.VideoCapture("http://10.61.115.69:8080/video")
-cap=cv2.VideoCapture("http://192.168.1.17:8080/video")
+# cap=cv2.VideoCapture("http://10.81.49.228:8080/video")
+cap=cv2.VideoCapture("http://10.81.50.151:8080/video")
+# cap=cv2.VideoCapture("http://192.168.1.17:8080/video")
 # cap=cv2.VideoCapture(0)
 # 
 # Image folder if not exist dynamically will generate
