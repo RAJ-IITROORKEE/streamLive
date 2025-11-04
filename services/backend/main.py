@@ -16,8 +16,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "http://localhost:3001",
-        "https://*.vercel.app",  # Allow all Vercel deployments
-        "https://streamlive.vercel.app",  # Your production URL (update this)
+        "https://stream-live-oyqr.vercel.app",  # Your Vercel production URL
+        "https://*.vercel.app",  # This might not work, keeping specific URL above
     ],
     allow_credentials=True,
     allow_methods=["*"],
