@@ -10,10 +10,15 @@ from typing import Optional
 
 app = FastAPI(title="Photo Click Backend")
 
-# Enable CORS for frontend dev server (localhost:3000)
+# Enable CORS for frontend dev server and production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # add your frontend URLs
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:3001",
+        "https://*.vercel.app",  # Allow all Vercel deployments
+        "https://streamlive.vercel.app",  # Your production URL (update this)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
