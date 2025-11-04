@@ -11,7 +11,7 @@ export default function About() {
             <span className="text-sm font-medium">Modern Camera Streaming Platform</span>
           </div>
           <h1 className="text-5xl font-bold mb-4 bg-linear-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-            About LiveStream
+            About StreamLive
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             A professional, real-time camera streaming and snapshot management platform 
@@ -129,7 +129,7 @@ export default function About() {
                 <li>The app will display a URL (e.g., http://192.168.1.100:8080)</li>
                 <li>Make sure your computer and phone are on the <strong>same WiFi network</strong></li>
                 <li>Copy the URL and add <code className="px-1 py-0.5 rounded" style={{backgroundColor: 'var(--muted)'}}>/video</code> at the end</li>
-                <li>Click <strong>&quot;Add Camera&quot;</strong> button in LiveStream dashboard</li>
+                <li>Click <strong>&quot;Add Camera&quot;</strong> button in StreamLive dashboard</li>
                 <li>Paste the complete URL (e.g., http://192.168.1.100:8080/video)</li>
                 <li>Give it a name and click &quot;Add Camera&quot; - your stream will appear instantly!</li>
               </ol>

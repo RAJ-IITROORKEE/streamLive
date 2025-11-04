@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LiveStream - Camera Dashboard",
+  title: "StreamLive - Camera Dashboard",
   description: "Modern camera streaming and snapshot management platform",
 };
 

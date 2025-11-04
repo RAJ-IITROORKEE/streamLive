@@ -11,6 +11,15 @@ interface CameraConfig {
   type: "webcam" | "ip"
 }
 
+interface CameraDocument {
+  _id: string
+  name: string
+  url: string
+  type: "webcam" | "ip"
+  isActive: boolean
+  lastUsed: Date
+}
+
 export default function Home() {
   const [cameras, setCameras] = useState<CameraConfig[]>([])
   const [showAddCamera, setShowAddCamera] = useState(false)
@@ -26,78 +35,103 @@ export default function Home() {
   const [savedCameras, setSavedCameras] = useState<Array<{name: string, url: string}>>([])
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-  // Load cameras from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("cameras")
-    if (saved) {
-      try {
-        setCameras(JSON.parse(saved))
-      } catch (e) {
-        console.error("Failed to parse saved cameras", e)
+  // Load cameras from MongoDB
+  const loadCameras = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cameras')
+      if (res.ok) {
+        const result = await res.json()
+        setCameras(result.data.map((cam: CameraDocument) => ({
+          id: cam._id,
+          name: cam.name,
+          url: cam.url,
+          type: cam.type,
+        })))
+        setSavedCameras(result.data.map((cam: CameraDocument) => ({
+          name: cam.name,
+          url: cam.url,
+        })))
       }
-    }
-    
-    // Load saved camera templates
-    const savedTemplates = localStorage.getItem("savedCameraTemplates")
-    if (savedTemplates) {
-      try {
-        setSavedCameras(JSON.parse(savedTemplates))
-      } catch (e) {
-        console.error("Failed to parse saved templates", e)
-      }
+    } catch (e) {
+      console.error("Failed to load cameras", e)
     }
   }, [])
 
-  // Save cameras to localStorage
   useEffect(() => {
-    localStorage.setItem("cameras", JSON.stringify(cameras))
-  }, [cameras])
+    loadCameras()
+  }, [loadCameras])
 
-  const addCamera = () => {
+  const addCamera = async () => {
     if (!newCameraName.trim() || !newCameraUrl.trim()) {
       toast.error("Please enter both name and URL")
       return
     }
 
-    if (editingCamera) {
-      // Update existing camera
-      setCameras(cameras.map(c => 
-        c.id === editingCamera.id 
-          ? { ...c, name: newCameraName.trim(), url: newCameraUrl.trim() }
-          : c
-      ))
-      toast.success("Camera updated successfully!")
-      setEditingCamera(null)
-    } else {
-      // Add new camera
-      const newCamera: CameraConfig = {
-        id: Date.now().toString(),
-        name: newCameraName.trim(),
-        url: newCameraUrl.trim(),
-        type: "ip",
+    try {
+      if (editingCamera) {
+        // Update existing camera
+        const res = await fetch(`/api/cameras/${editingCamera.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newCameraName.trim(),
+            url: newCameraUrl.trim(),
+          })
+        })
+        
+        if (res.ok) {
+          await loadCameras()
+          toast.success("Camera updated successfully!")
+          setEditingCamera(null)
+        } else {
+          toast.error("Failed to update camera")
+        }
+      } else {
+        // Add new camera
+        const res = await fetch('/api/cameras', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newCameraName.trim(),
+            url: newCameraUrl.trim(),
+            type: 'ip',
+          })
+        })
+        
+        if (res.ok) {
+          await loadCameras()
+          toast.success(`Camera "${newCameraName.trim()}" added successfully!`)
+        } else {
+          const error = await res.json()
+          toast.error(error.error || "Failed to add camera")
+        }
       }
-      setCameras([...cameras, newCamera])
       
-      // Save as template if not already saved
-      const template = { name: newCameraName.trim(), url: newCameraUrl.trim() }
-      const exists = savedCameras.some(sc => sc.url === template.url)
-      if (!exists) {
-        const updated = [...savedCameras, template]
-        setSavedCameras(updated)
-        localStorage.setItem("savedCameraTemplates", JSON.stringify(updated))
-      }
-      
-      toast.success(`Camera "${newCamera.name}" added successfully!`)
+      setNewCameraName("")
+      setNewCameraUrl("")
+      setShowAddCamera(false)
+    } catch (error) {
+      console.error("Error saving camera:", error)
+      toast.error("Failed to save camera")
     }
-    
-    setNewCameraName("")
-    setNewCameraUrl("")
-    setShowAddCamera(false)
   }
 
-  const removeCamera = (id: string) => {
-    setCameras(cameras.filter((c) => c.id !== id))
-    toast.success("Camera removed")
+  const removeCamera = async (id: string) => {
+    try {
+      const res = await fetch(`/api/cameras/${id}`, {
+        method: 'DELETE',
+      })
+      
+      if (res.ok) {
+        await loadCameras()
+        toast.success("Camera removed")
+      } else {
+        toast.error("Failed to remove camera")
+      }
+    } catch (error) {
+      console.error("Error removing camera:", error)
+      toast.error("Failed to remove camera")
+    }
   }
 
   const startEditCamera = (camera: CameraConfig) => {
@@ -132,8 +166,9 @@ export default function Home() {
 
   // removed duplicate loadPhotos function - use the useCallback version above
 
-  const takeSnapshot = async (sourceUrl?: string) => {
+  const takeSnapshot = async (sourceUrl?: string, camera?: CameraConfig) => {
     try {
+      // First, get the snapshot from the backend
       const body = sourceUrl ? { camera_url: sourceUrl } : { camera_index: 0 }
       const res = await fetch(`${API}/snapshot`, {
         method: "POST",
@@ -144,8 +179,37 @@ export default function Home() {
         const txt = await res.text()
         throw new Error(txt || "snapshot failed")
       }
-      await res.json()
-      toast.success("Snapshot saved successfully!")
+      const data = await res.json()
+      
+      // Get the image from backend - backend returns { filename, url, timestamp }
+      // The url is relative like "/images/snapshot_xxx.jpg"
+      const imageUrl = `${API}${data.url}`
+      const imageRes = await fetch(imageUrl)
+      
+      if (!imageRes.ok) {
+        throw new Error('Failed to fetch image from backend')
+      }
+      
+      const imageBlob = await imageRes.blob()
+      
+      // Upload to Cloudinary via our Next.js API
+      const formData = new FormData()
+      formData.append('image', imageBlob, data.filename || 'snapshot.jpg')
+      formData.append('cameraName', camera?.name || 'Unknown Camera')
+      formData.append('cameraUrl', sourceUrl || 'webcam')
+      
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to upload to cloud storage')
+      }
+      
+      await uploadRes.json()
+      toast.success("Snapshot saved to cloud successfully!")
     } catch (e) {
       const msg = e && (e as Error).message ? (e as Error).message : String(e)
       toast.error("Snapshot failed: " + msg)
@@ -168,7 +232,7 @@ export default function Home() {
     }, 1000)
     
     setTimeout(() => {
-      takeSnapshot(camera.type === "ip" ? camera.url : undefined)
+      takeSnapshot(camera.type === "ip" ? camera.url : undefined, camera)
       setTimerSeconds(null)
       setCountdown(null)
     }, seconds * 1000)
@@ -273,7 +337,7 @@ export default function Home() {
               </div>
               <div className="p-4 flex gap-2">
                 <button
-                  onClick={() => takeSnapshot(camera.url)}
+                  onClick={() => takeSnapshot(camera.url, camera)}
                   className="flex-1 px-3 py-2 rounded hover:opacity-90 text-sm"
                   style={{backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)'}}
                 >
@@ -416,7 +480,7 @@ export default function Home() {
             <h2 className="text-lg font-semibold">{fullscreenCamera.name}</h2>
             <div className="flex gap-2">
               <button
-                onClick={() => takeSnapshot(fullscreenCamera.url)}
+                onClick={() => takeSnapshot(fullscreenCamera.url, fullscreenCamera)}
                 className="px-3 py-1.5 rounded hover:opacity-90 flex items-center gap-2"
                 style={{backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)'}}
                 disabled={timerSeconds !== null}
